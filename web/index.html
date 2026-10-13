@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LoDeskStream</title>
+  <link rel="icon" href="/lodeskstream-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="theme-color" content="#121212">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      background: #121212;
+      color: #e8e8e8;
+      font: 14px/1.4 Segoe UI, sans-serif;
+    }
+    header { display: flex; gap: 8px; align-items: center; padding: 10px; border-bottom: 1px solid #2c2c2c; flex-wrap: wrap; }
+    header.in-stage-menu {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      max-width: min(92vw, 980px);
+      justify-content: center;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+    .brand svg { width: 20px; height: 20px; display: block; }
+    input, button, select { background: #1f1f1f; color: #e8e8e8; border: 1px solid #3a3a3a; border-radius: 6px; padding: 6px 8px; }
+    button { cursor: pointer; }
+    #status { color: #ff8c8c; }
+    main {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    #stage {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    #viewer, #fallbackViewer {
+      display: block;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      object-fit: contain;
+      border: 1px solid #2c2c2c;
+      border-radius: 8px;
+      user-select: none;
+      -webkit-user-drag: none;
+      background: #000;
+      outline: none;
+      margin: auto;
+    }
+    .hidden { display: none !important; }
+    #remoteCursor {
+      position: absolute;
+      display: none;
+      width: 18px;
+      height: 27px;
+      pointer-events: none;
+      transform: translate(-1px, -1px);
+      filter: drop-shadow(0 1px 2px #000);
+    }
+    #stageMenu {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      touch-action: none;
+    }
+    #stageMenu:not(.fullscreen-active) { display: none; }
+    #stageMenu.dragging { opacity: 0.86; }
+    #stageMenuToggle {
+      width: 42px;
+      height: 34px;
+      padding: 0;
+      border-color: #4a4a4a;
+      background: rgba(20, 20, 20, 0.82);
+      font-size: 20px;
+      line-height: 1;
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+      cursor: grab;
+    }
+    #stageMenu.dragging #stageMenuToggle { cursor: grabbing; }
+    #stageMenuPanel {
+      display: none;
+      max-width: min(92vw, 980px);
+      padding: 8px;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      background: rgba(18, 18, 18, 0.92);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
+      pointer-events: auto;
+      backdrop-filter: blur(10px);
+      animation: slideDown 140ms ease-out;
+    }
+    #stageMenu.open #stageMenuPanel { display: block; }
+    #stageMenuPanel select { max-width: 300px; }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .note {
+      color: #b7b7b7;
+      margin-left: auto;
+      min-width: 0;
+      max-width: 520px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <header id="controlsBar">
+    <span class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#34d399"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+          </linearGradient>
+        </defs>
+        <rect x="6" y="10" width="52" height="36" rx="8" fill="#0f172a" stroke="url(#brandGradient)" stroke-width="3"/>
+        <path d="M14 34 L24 24 L31 31 L42 20 L50 28" fill="none" stroke="url(#brandGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="20" y="50" width="24" height="4" rx="2" fill="#94a3b8"/>
+        <rect x="28" y="46" width="8" height="4" rx="2" fill="#94a3b8"/>
+      </svg>
+      LoDeskStream
+    </span>
+    <input id="token" type="password" placeholder="STREAM_TOKEN">
+    <button id="connect">Connect</button>
+    <button id="disconnect">Disconnect</button>
+    <button id="fullscreen">Full screen</button>
+    <button id="muteAudio">Mute audio</button>
+    <select id="monitor"></select>
+    <label><input id="fullMouse" type="checkbox"> Full mouse (move+click)</label>
+    <span id="status">Disconnected</span>
+    <span class="note">Default mode sends click + keyboard only (no continuous mouse move)</span>
+  </header>
+  <main>
+    <div id="stage">
+      <video id="viewer" autoplay playsinline tabindex="0"></video>
+      <img id="fallbackViewer" class="hidden" alt="Desktop stream" tabindex="0">
+      <svg id="remoteCursor" viewBox="0 0 18 27" aria-hidden="true">
+        <path d="M1 1v22l5-5 4 9 4-2-4-9h7z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <div id="stageMenu">
+        <button id="stageMenuToggle" title="Show controls" aria-label="Show controls" aria-expanded="false">☰</button>
+        <div id="stageMenuPanel"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const viewer = document.getElementById("viewer");
+    const fallbackViewer = document.getElementById("fallbackViewer");
+    const controlsBar = document.getElementById("controlsBar");
+    const mainEl = document.querySelector("main");
+    const stage = document.getElementById("stage");
+    const remoteCursor = document.getElementById("remoteCursor");
+    const statusEl = document.getElementById("status");
+    const tokenEl = document.getElementById("token");
+    const connectBtn = document.getElementById("connect");
+    const disconnectBtn = document.getElementById("disconnect");
+    const fullscreenBtn = document.getElementById("fullscreen");
+    const muteAudioBtn = document.getElementById("muteAudio");
+    const monitorEl = document.getElementById("monitor");
+    const fullMouseEl = document.getElementById("fullMouse");
+    const stageMenu = document.getElementById("stageMenu");
+    const stageMenuToggle = document.getElementById("stageMenuToggle");
+    const stageMenuPanel = document.getElementById("stageMenuPanel");
+    let token = "";
+    let lastMoveAt = 0;
+    let connected = false;
+    let monitorsLoaded = false;
+    let peerConnection = null;
+    let usingWebRtc = false;
+    let audioMuted = false;
+    let menuDrag = null;
+
+    function status(msg, ok = true) {
+      statusEl.textContent = msg;
+      statusEl.style.color = ok ? "#9cd67a" : "#ff8c8c";
+    }
+
+    function activeViewer() {
+      return usingWebRtc ? viewer : fallbackViewer;
+    }
+
+    function showWebRtcViewer() {
+      usingWebRtc = true;
+      viewer.classList.remove("hidden");
+      fallbackViewer.classList.add("hidden");
+      fallbackViewer.removeAttribute("src");
+    }
+
+    function showFallbackViewer() {
+      usingWebRtc = false;
+      fallbackViewer.classList.remove("hidden");
+      viewer.classList.add("hidden");
+      viewer.pause();
+      viewer.srcObject = null;
+    }
+
+    function updateAudioButton() {
+      viewer.muted = audioMuted;
+      muteAudioBtn.textContent = audioMuted ? "Unmute audio" : "Mute audio";
+    }
+
+    function updateFullscreenButtons() {
+      const inFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+      fullscreenBtn.textContent = inFullscreen ? "Exit full screen" : "Full screen";
+      stageMenu.classList.toggle("fullscreen-active", Boolean(inFullscreen));
+      if (!inFullscreen) {
+        setStageMenuOpen(false);
+      }
+    }
+
+    function setStageMenuOpen(open) {
+      stageMenu.classList.toggle("open", open);
+      stageMenuToggle.setAttribute("aria-expanded", String(open));
+      if (open) {
+        stageMenuPanel.appendChild(controlsBar);
+        controlsBar.classList.add("in-stage-menu");
+      } else {
+        document.body.insertBefore(controlsBar, mainEl);
+        controlsBar.classList.remove("in-stage-menu");
+      }
+      keepStageMenuInBounds();
+    }
+
+    function pinStageMenu(left, top) {
+      const stageRect = stage.getBoundingClientRect();
+      const menuRect = stageMenu.getBoundingClientRect();
+      const maxLeft = Math.max(0, stageRect.width - menuRect.width);
+      const maxTop = Math.max(0, stageRect.height - menuRect.height);
+      const nextLeft = Math.min(maxLeft, Math.max(0, left));
+      const nextTop = Math.min(maxTop, Math.max(0, top));
+      stageMenu.style.left = `${nextLeft}px`;
+      stageMenu.style.top = `${nextTop}px`;
+      stageMenu.style.transform = "none";
+    }
+
+    function keepStageMenuInBounds() {
+      const rect = stageMenu.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      pinStageMenu(rect.left - stageRect.left, rect.top - stageRect.top);
+    }
+
+    function selectedMonitor() {
+      const option = monitorEl.selectedOptions[0];
+      const width = Number(option?.dataset.width);
+      const height = Number(option?.dataset.height);
+      return {
+        index: selectedMonitorIndex(),
+        width: Number.isFinite(width) && width > 0 ? width : 16,
+        height: Number.isFinite(height) && height > 0 ? height : 9
+      };
+    }
+
+    function streamContentRect() {
+      const media = activeViewer();
+      const borderRect = media.getBoundingClientRect();
+      const rect = {
+        left: borderRect.left + media.clientLeft,
+        top: borderRect.top + media.clientTop,
+        width: media.clientWidth,
+        height: media.clientHeight
+      };
+      const monitor = selectedMonitor();
+      const streamAspect = monitor.width / monitor.height;
+      const viewAspect = rect.width / rect.height;
+      let width = rect.width;
+      let height = rect.height;
+      let left = rect.left;
+      let top = rect.top;
+      if (viewAspect > streamAspect) {
+        width = height * streamAspect;
+        left += (rect.width - width) / 2;
+      } else {
+        height = width / streamAspect;
+        top += (rect.height - height) / 2;
+      }
+      return { left, top, width, height };
+    }
+
+    function relativePos(event) {
+      const rect = streamContentRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      if (x < 0 || y < 0 || x > 1 || y > 1) return null;
+      return {
+        x,
+        y
+      };
+    }
+
+    function selectedMonitorIndex() {
+      const index = Number(monitorEl.value);
+      return Number.isFinite(index) && index > 0 ? index : 1;
+    }
+
+    function fullMouseEnabled() {
+      return fullMouseEl.checked;
+    }
+
+    async function sendEvent(payload) {
+      if (!token || !connected) return;
+      try {
+        await fetch("/api/input", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+          body: JSON.stringify({ ...payload, monitorIndex: selectedMonitorIndex() })
+        });
+      } catch {
+        status("Input channel error", false);
+      }
+    }
+
+    function setMjpegStreamSource() {
+      showFallbackViewer();
+      const url = `/stream?token=${encodeURIComponent(token)}&monitor=${selectedMonitorIndex()}&ts=${Date.now()}`;
+      stage.scrollTop = 0;
+      stage.scrollLeft = 0;
+      fallbackViewer.removeAttribute("src");
+      requestAnimationFrame(() => {
+        fallbackViewer.src = url;
+      });
+    }
+
+    function closePeerConnection() {
+      if (!peerConnection) return;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
+      peerConnection = null;
+    }
+
+    async function waitForIceGatheringComplete(pc) {
+      if (pc.iceGatheringState === "complete") return;
+      await new Promise((resolve) => {
+        let timeoutId = 0;
+        const checkState = () => {
+          if (pc.iceGatheringState === "complete") {
+            pc.removeEventListener("icegatheringstatechange", checkState);
+            clearTimeout(timeoutId);
+            resolve();
+          }
+        };
+        pc.addEventListener("icegatheringstatechange", checkState);
+        timeoutId = setTimeout(() => {
+          pc.removeEventListener("icegatheringstatechange", checkState);
+          resolve();
+        }, 1500);
+      });
+    }
+
+    async function startWebRtcStream() {
+      closePeerConnection();
+      showWebRtcViewer();
+      updateAudioButton();
+
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      peerConnection = pc;
+      const remoteStream = new MediaStream();
+      viewer.srcObject = remoteStream;
+
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        remoteStream.addTrack(event.track);
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          status("WebRTC connection lost", false);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await waitForIceGatheringComplete(pc);
+
+      const response = await fetch("/webrtc/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+        body: JSON.stringify({
+          type: pc.localDescription.type,
+          sdp: pc.localDescription.sdp,
+          monitor: selectedMonitorIndex(),
+          audio: true
+        })
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "WebRTC offer failed");
+      }
+      const answer = await response.json();
+      if (!answer.ok) throw new Error(answer.error || "WebRTC answer failed");
+      await pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+
+      try {
+        await viewer.play();
+      } catch {
+        audioMuted = true;
+        updateAudioButton();
+        await viewer.play();
+      }
+
+      const audioSuffix = answer.audio ? " + audio" : " video only";
+      status(`Connected (WebRTC${audioSuffix})${answer.audioError ? " - audio unavailable" : ""}`);
+    }
+
+    function disconnect() {
+      connected = false;
+      closePeerConnection();
+      viewer.pause();
+      viewer.srcObject = null;
+      fallbackViewer.removeAttribute("src");
+      remoteCursor.style.display = "none";
+      status("Disconnected", false);
+    }
+
+    function updateRemoteCursor(event) {
+      const p = relativePos(event);
+      if (!p) {
+        remoteCursor.style.display = "none";
+        return null;
+      }
+      const content = streamContentRect();
+      const stageRect = stage.getBoundingClientRect();
+      remoteCursor.style.left = `${content.left - stageRect.left + (p.x * content.width)}px`;
+      remoteCursor.style.top = `${content.top - stageRect.top + (p.y * content.height)}px`;
+      remoteCursor.style.display = connected ? "block" : "none";
+      return p;
+    }
+
+    async function loadMonitors() {
+      if (!token) return;
+      try {
+        const response = await fetch("/api/monitors", {
+          headers: { "X-Auth-Token": token }
+        });
+        if (!response.ok) {
+          status("Unable to load monitors", false);
+          return;
+        }
+        const data = await response.json();
+        monitorEl.innerHTML = "";
+        for (const item of data.monitors || []) {
+          const option = document.createElement("option");
+          option.value = String(item.index);
+          option.dataset.width = String(item.width);
+          option.dataset.height = String(item.height);
+          option.textContent = `MSS#${item.index} - ${item.name}`;
+          if (item.current) option.selected = true;
+          monitorEl.appendChild(option);
+        }
+        monitorsLoaded = monitorEl.options.length > 0;
+        if (monitorsLoaded) {
+          status("Monitors loaded");
+        } else {
+          status("No monitor found", false);
+        }
+      } catch {
+        status("Unable to load monitors", false);
+      }
+    }
+
+    connectBtn.addEventListener("click", async () => {
+      try {
+        token = tokenEl.value.trim();
+        if (!token) {
+          status("Token required", false);
+          return;
+        }
+        if (!monitorsLoaded) {
+          await loadMonitors();
+        }
+        if (!monitorsLoaded) {
+          status("No monitor found", false);
+          return;
+        }
+        const index = selectedMonitorIndex();
+        const response = await fetch("/api/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+          body: JSON.stringify({ index })
+        });
+        if (!response.ok) {
+          status("Monitor selection failed", false);
+          return;
+        }
+        connected = true;
+        try {
+          await startWebRtcStream();
+        } catch (error) {
+          console.warn("WebRTC failed, falling back to MJPEG", error);
+          closePeerConnection();
+          setMjpegStreamSource();
+          status("Connected (MJPEG fallback)");
+        }
+        activeViewer().focus();
+      } catch {
+        status("Connect failed", false);
+      }
+    });
+
+    disconnectBtn.addEventListener("click", () => {
+      disconnect();
+    });
+
+    async function changeMonitor(index) {
+      if (!token) return;
+      monitorEl.value = String(index);
+      try {
+        const response = await fetch("/api/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+          body: JSON.stringify({ index })
+        });
+        if (!response.ok) {
+          status("Monitor change failed", false);
+          return;
+        }
+        if (connected) {
+          if (usingWebRtc) {
+            try {
+              await startWebRtcStream();
+            } catch (error) {
+              console.warn("WebRTC restart failed, falling back to MJPEG", error);
+              closePeerConnection();
+              setMjpegStreamSource();
+              status("Connected (MJPEG fallback)");
+            }
+          } else {
+            setMjpegStreamSource();
+          }
+        }
+      } catch {
+        status("Monitor change failed", false);
+      }
+    }
+
+    monitorEl.addEventListener("change", async () => {
+      await changeMonitor(Number(monitorEl.value));
+    });
+
+    async function toggleFullscreen() {
+      try {
+        const inFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+        if (!inFullscreen) {
+          if (stage.requestFullscreen) {
+            await stage.requestFullscreen();
+          } else if (stage.webkitRequestFullscreen) {
+            stage.webkitRequestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
+        updateFullscreenButtons();
+      } catch {
+        status("Fullscreen failed", false);
+      }
+    }
+
+    fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+    muteAudioBtn.addEventListener("click", async () => {
+      audioMuted = !audioMuted;
+      updateAudioButton();
+      if (usingWebRtc && viewer.srcObject) {
+        try {
+          await viewer.play();
+        } catch {
+          status("Audio unmute blocked by browser", false);
+        }
+      }
+    });
+
+    stageMenuToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (stageMenuToggle.dataset.dragged === "1") {
+        stageMenuToggle.dataset.dragged = "0";
+        return;
+      }
+      setStageMenuOpen(!stageMenu.classList.contains("open"));
+    });
+
+    stageMenuToggle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const stageRect = stage.getBoundingClientRect();
+      const menuRect = stageMenu.getBoundingClientRect();
+      menuDrag = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - menuRect.left,
+        offsetY: event.clientY - menuRect.top,
+        startX: event.clientX,
+        startY: event.clientY
+      };
+      stageMenuToggle.dataset.dragged = "0";
+      stageMenu.classList.add("dragging");
+      stageMenuToggle.setPointerCapture(event.pointerId);
+      pinStageMenu(menuRect.left - stageRect.left, menuRect.top - stageRect.top);
+    });
+
+    stageMenuToggle.addEventListener("pointermove", (event) => {
+      if (!menuDrag || menuDrag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const moved = Math.hypot(event.clientX - menuDrag.startX, event.clientY - menuDrag.startY);
+      if (moved > 3) stageMenuToggle.dataset.dragged = "1";
+      const stageRect = stage.getBoundingClientRect();
+      pinStageMenu(
+        event.clientX - stageRect.left - menuDrag.offsetX,
+        event.clientY - stageRect.top - menuDrag.offsetY
+      );
+    });
+
+    stageMenuToggle.addEventListener("pointerup", (event) => {
+      if (!menuDrag || menuDrag.pointerId !== event.pointerId) return;
+      stageMenu.classList.remove("dragging");
+      stageMenuToggle.releasePointerCapture(event.pointerId);
+      menuDrag = null;
+    });
+
+    stageMenuToggle.addEventListener("pointercancel", (event) => {
+      if (!menuDrag || menuDrag.pointerId !== event.pointerId) return;
+      stageMenu.classList.remove("dragging");
+      menuDrag = null;
+    });
+
+    stageMenu.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+
+    stageMenu.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    stageMenu.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    function handleFullscreenChange() {
+      updateFullscreenButtons();
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    window.addEventListener("resize", keepStageMenuInBounds);
+    updateFullscreenButtons();
+    updateAudioButton();
+
+    tokenEl.addEventListener("input", () => {
+      monitorsLoaded = false;
+      monitorEl.innerHTML = "";
+      if (connected) {
+        disconnect();
+      }
+    });
+
+    stage.addEventListener("mousemove", (event) => {
+      const p = updateRemoteCursor(event);
+      if (!p) return;
+      if (!fullMouseEnabled()) return;
+      const now = performance.now();
+      if (now - lastMoveAt < 30) return;
+      lastMoveAt = now;
+      sendEvent({ type: "mouse_move", x: p.x, y: p.y });
+    });
+
+    stage.addEventListener("click", (event) => {
+      const p = updateRemoteCursor(event);
+      if (!p) return;
+      sendEvent({
+        type: "mouse_click",
+        x: p.x,
+        y: p.y,
+        button: event.button,
+        double: false,
+        preserveCursor: !fullMouseEnabled()
+      });
+      activeViewer().focus();
+    });
+
+    stage.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const p = updateRemoteCursor(event);
+      if (!p) return;
+      sendEvent({
+        type: "mouse_click",
+        x: p.x,
+        y: p.y,
+        button: 2,
+        double: false,
+        preserveCursor: !fullMouseEnabled()
+      });
+      activeViewer().focus();
+    });
+
+    stage.addEventListener("dblclick", (event) => {
+      const p = updateRemoteCursor(event);
+      if (!p) return;
+      sendEvent({
+        type: "mouse_click",
+        x: p.x,
+        y: p.y,
+        button: event.button,
+        double: true,
+        preserveCursor: !fullMouseEnabled()
+      });
+      activeViewer().focus();
+    });
+
+    stage.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      if (!relativePos(event)) return;
+      const amount = Math.round(-event.deltaY);
+      sendEvent({ type: "scroll", amount });
+    }, { passive: false });
+
+    stage.addEventListener("mouseleave", () => {
+      remoteCursor.style.display = "none";
+    });
+
+    stage.addEventListener("keydown", (event) => {
+      event.preventDefault();
+      sendEvent({ type: "key", key: event.key, action: "tap" });
+    });
+
+    fallbackViewer.addEventListener("error", () => {
+      connected = false;
+      status("Stream error (token or server)", false);
+    });
+
+    viewer.addEventListener("error", () => {
+      connected = false;
+      status("WebRTC media error", false);
+    });
+  </script>
+</body>
+</html>

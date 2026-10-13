@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.spec
+*.log
+debug-captures/
+analyze_capture.py
+debug_capture_test.py
