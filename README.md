@@ -64,6 +64,12 @@ The tray controller starts LoDeskStream automatically and lets you:
 - set a custom password/token or generate a new one;
 - exit the tray app, which also stops the server.
 
+## Legacy mobile behavior
+
+Older iOS/WebKit browsers may connect to WebRTC without rendering video. LoDeskStream automatically falls back to MJPEG if WebRTC does not produce visible frames. Touching the remote screen also focuses a hidden local text field so old iPads can show the on-screen keyboard and forward typed text to the host.
+
+On phones and small tablets, the web UI asks users to rotate to landscape. Installed/PWA mode also declares landscape orientation in the web manifest; browser support varies by iOS version.
+
 To uninstall an installed copy, use Windows **Apps & features** or run:
 
 ```powershell

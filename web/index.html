@@ -68,6 +68,39 @@
       outline: none;
       margin: auto;
     }
+    #mobileKeyboard {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 1px;
+      height: 1px;
+      opacity: 0.01;
+      border: 0;
+      padding: 0;
+      pointer-events: none;
+      resize: none;
+    }
+    #rotateHint {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      box-sizing: border-box;
+      background: #121212;
+      color: #e8e8e8;
+      text-align: center;
+    }
+    #rotateHint strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+    @media (orientation: portrait) and (max-width: 900px) {
+      #rotateHint { display: flex; }
+    }
     .hidden { display: none !important; }
     #remoteCursor {
       position: absolute;
@@ -162,10 +195,17 @@
     <span id="status">Disconnected</span>
     <span class="note">Default mode sends click + keyboard only (no continuous mouse move)</span>
   </header>
+  <div id="rotateHint">
+    <div>
+      <strong>Rotate your device</strong>
+      LoDeskStream works best in landscape mode.
+    </div>
+  </div>
   <main>
     <div id="stage" tabindex="0">
       <video id="viewer" autoplay playsinline tabindex="0"></video>
       <img id="fallbackViewer" class="hidden" alt="Desktop stream" tabindex="0">
+      <textarea id="mobileKeyboard" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-hidden="true"></textarea>
       <svg id="remoteCursor" viewBox="0 0 18 27" aria-hidden="true">
         <path d="M1 1v22l5-5 4 9 4-2-4-9h7z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
       </svg>
@@ -182,6 +222,7 @@
     const controlsBar = document.getElementById("controlsBar");
     const mainEl = document.querySelector("main");
     const stage = document.getElementById("stage");
+    const mobileKeyboard = document.getElementById("mobileKeyboard");
     const remoteCursor = document.getElementById("remoteCursor");
     const statusEl = document.getElementById("status");
     const tokenEl = document.getElementById("token");
@@ -274,8 +315,8 @@
 
     function selectedMonitor() {
       const option = monitorEl.selectedOptions[0];
-      const width = Number(option?.dataset.width);
-      const height = Number(option?.dataset.height);
+      const width = Number(option && option.dataset ? option.dataset.width : 0);
+      const height = Number(option && option.dataset ? option.dataset.height : 0);
       return {
         index: selectedMonitorIndex(),
         width: Number.isFinite(width) && width > 0 ? width : 16,
@@ -329,16 +370,41 @@
       return fullMouseEl.checked;
     }
 
+    function focusMobileKeyboard() {
+      if (!connected) return;
+      mobileKeyboard.value = "";
+      try {
+        mobileKeyboard.focus();
+      } catch (error) {
+        // Some legacy mobile browsers only allow focus directly from a user tap.
+      }
+    }
+
+    function sendTextInput(value) {
+      if (!value) return;
+      const normalized = value.replace(/\r\n/g, "\n");
+      const parts = normalized.split("\n");
+      for (let i = 0; i < parts.length; i += 1) {
+        if (parts[i]) {
+          sendEvent({ type: "text", text: parts[i] });
+        }
+        if (i < parts.length - 1) {
+          sendEvent({ type: "key", key: "enter", action: "tap" });
+        }
+      }
+    }
+
     async function sendEvent(payload) {
       if (!token || !connected) return;
       try {
+        const body = Object.assign({}, payload, { monitorIndex: selectedMonitorIndex() });
         const response = await fetch("/api/input", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Auth-Token": token },
-          body: JSON.stringify({ ...payload, monitorIndex: selectedMonitorIndex() })
+          body: JSON.stringify(body)
         });
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
+          const data = await response.json().catch(function () { return {}; });
           status(`Input error: ${data.error || response.status}`, false);
         }
       } catch (error) {
@@ -429,7 +495,7 @@
 
       try {
         await viewer.play();
-      } catch {
+      } catch (error) {
         audioMuted = true;
         updateAudioButton();
         await viewer.play();
@@ -437,6 +503,14 @@
 
       const audioSuffix = answer.audio ? " + audio" : " video only";
       status(`Connected (WebRTC${audioSuffix})${answer.audioError ? " - audio unavailable" : ""}`);
+      setTimeout(function () {
+        if (connected && usingWebRtc && (!viewer.videoWidth || !viewer.videoHeight)) {
+          console.warn("WebRTC connected without visible video, falling back to MJPEG");
+          closePeerConnection();
+          setMjpegStreamSource();
+          status("Connected (MJPEG fallback - no audio)");
+        }
+      }, 3500);
     }
 
     function disconnect() {
@@ -490,7 +564,7 @@
         } else {
           status("No monitor found", false);
         }
-      } catch {
+      } catch (error) {
         status("Unable to load monitors", false);
       }
     }
@@ -529,7 +603,7 @@
           status("Connected (MJPEG fallback)");
         }
         stage.focus();
-      } catch {
+      } catch (error) {
         status("Connect failed", false);
       }
     });
@@ -565,7 +639,7 @@
             setMjpegStreamSource();
           }
         }
-      } catch {
+      } catch (error) {
         status("Monitor change failed", false);
       }
     }
@@ -583,6 +657,13 @@
           } else if (stage.webkitRequestFullscreen) {
             stage.webkitRequestFullscreen();
           }
+          if (screen.orientation && screen.orientation.lock) {
+            try {
+              await screen.orientation.lock("landscape");
+            } catch (error) {
+              // iOS Safari usually does not support orientation locking from web pages.
+            }
+          }
         } else {
           if (document.exitFullscreen) {
             await document.exitFullscreen();
@@ -591,7 +672,7 @@
           }
         }
         updateFullscreenButtons();
-      } catch {
+      } catch (error) {
         status("Fullscreen failed", false);
       }
     }
@@ -604,7 +685,7 @@
       if (usingWebRtc && viewer.srcObject) {
         try {
           await viewer.play();
-        } catch {
+        } catch (error) {
           status("Audio unmute blocked by browser", false);
         }
       }
@@ -716,12 +797,12 @@
         double: false,
         preserveCursor: !fullMouseEnabled()
       });
-      stage.focus();
+      focusMobileKeyboard();
     });
 
     stage.addEventListener("click", (event) => {
       event.preventDefault();
-      stage.focus();
+      focusMobileKeyboard();
     });
 
     stage.addEventListener("contextmenu", (event) => {
@@ -736,7 +817,7 @@
         double: false,
         preserveCursor: !fullMouseEnabled()
       });
-      stage.focus();
+      focusMobileKeyboard();
     });
 
     stage.addEventListener("dblclick", (event) => {
@@ -750,7 +831,7 @@
         double: true,
         preserveCursor: !fullMouseEnabled()
       });
-      stage.focus();
+      focusMobileKeyboard();
     });
 
     stage.addEventListener("wheel", (event) => {
@@ -772,6 +853,32 @@
       }
       return true;
     }
+
+    mobileKeyboard.addEventListener("beforeinput", (event) => {
+      if (!connected) return;
+      if (event.inputType === "deleteContentBackward") {
+        event.preventDefault();
+        sendEvent({ type: "key", key: "backspace", action: "tap" });
+      } else if (event.inputType === "insertLineBreak") {
+        event.preventDefault();
+        sendEvent({ type: "key", key: "enter", action: "tap" });
+      }
+    });
+
+    mobileKeyboard.addEventListener("input", () => {
+      if (!connected) return;
+      sendTextInput(mobileKeyboard.value);
+      mobileKeyboard.value = "";
+    });
+
+    mobileKeyboard.addEventListener("keydown", (event) => {
+      if (!connected) return;
+      if (event.key === "Backspace" || event.key === "Enter") {
+        event.preventDefault();
+        sendEvent({ type: "key", key: event.key, action: "tap" });
+        mobileKeyboard.value = "";
+      }
+    });
 
     document.addEventListener("keydown", (event) => {
       if (!shouldCaptureKey(event)) return;
