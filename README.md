@@ -37,6 +37,22 @@ python -m PyInstaller --noconfirm --clean --name LoDeskStream --onedir --console
 
 Run `dist\LoDeskStream\LoDeskStream.exe`, or use `run-lodeskstream.ps1` from the portable package to start with a generated token.
 
+## Windows installer
+
+The installer is a per-user setup that extracts the portable build to:
+
+```text
+%LOCALAPPDATA%\Programs\LoDeskStream
+```
+
+It also creates Desktop and Start Menu shortcuts.
+
+To rebuild it:
+
+```powershell
+dotnet publish .\installer-src\LoDeskStreamInstaller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o .\dist\installer
+```
+
 ## Notes
 
 - No internet is required.

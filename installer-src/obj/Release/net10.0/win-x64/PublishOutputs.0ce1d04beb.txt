@@ -1,0 +1,2 @@
+C:\Users\rafasouza\OneDrive - Microsoft\Documents\Microsoft Scout\desktop-stream-poc\dist\installer\LoDeskStream-Setup.pdb
+C:\Users\rafasouza\OneDrive - Microsoft\Documents\Microsoft Scout\desktop-stream-poc\dist\installer\LoDeskStream-Setup.exe
