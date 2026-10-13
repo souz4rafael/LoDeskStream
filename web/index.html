@@ -52,6 +52,7 @@
       justify-content: center;
       overflow: hidden;
       position: relative;
+      outline: none;
     }
     #viewer, #fallbackViewer {
       display: block;
@@ -162,7 +163,7 @@
     <span class="note">Default mode sends click + keyboard only (no continuous mouse move)</span>
   </header>
   <main>
-    <div id="stage">
+    <div id="stage" tabindex="0">
       <video id="viewer" autoplay playsinline tabindex="0"></video>
       <img id="fallbackViewer" class="hidden" alt="Desktop stream" tabindex="0">
       <svg id="remoteCursor" viewBox="0 0 18 27" aria-hidden="true">
@@ -331,13 +332,17 @@
     async function sendEvent(payload) {
       if (!token || !connected) return;
       try {
-        await fetch("/api/input", {
+        const response = await fetch("/api/input", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Auth-Token": token },
           body: JSON.stringify({ ...payload, monitorIndex: selectedMonitorIndex() })
         });
-      } catch {
-        status("Input channel error", false);
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          status(`Input error: ${data.error || response.status}`, false);
+        }
+      } catch (error) {
+        status(`Input channel error: ${error.message}`, false);
       }
     }
 
@@ -523,7 +528,7 @@
           setMjpegStreamSource();
           status("Connected (MJPEG fallback)");
         }
-        activeViewer().focus();
+        stage.focus();
       } catch {
         status("Connect failed", false);
       }
@@ -698,7 +703,9 @@
       sendEvent({ type: "mouse_move", x: p.x, y: p.y });
     });
 
-    stage.addEventListener("click", (event) => {
+    stage.addEventListener("mousedown", (event) => {
+      if (event.button === 2) return;
+      event.preventDefault();
       const p = updateRemoteCursor(event);
       if (!p) return;
       sendEvent({
@@ -709,7 +716,12 @@
         double: false,
         preserveCursor: !fullMouseEnabled()
       });
-      activeViewer().focus();
+      stage.focus();
+    });
+
+    stage.addEventListener("click", (event) => {
+      event.preventDefault();
+      stage.focus();
     });
 
     stage.addEventListener("contextmenu", (event) => {
@@ -724,7 +736,7 @@
         double: false,
         preserveCursor: !fullMouseEnabled()
       });
-      activeViewer().focus();
+      stage.focus();
     });
 
     stage.addEventListener("dblclick", (event) => {
@@ -738,7 +750,7 @@
         double: true,
         preserveCursor: !fullMouseEnabled()
       });
-      activeViewer().focus();
+      stage.focus();
     });
 
     stage.addEventListener("wheel", (event) => {
@@ -752,7 +764,17 @@
       remoteCursor.style.display = "none";
     });
 
-    stage.addEventListener("keydown", (event) => {
+    function shouldCaptureKey(event) {
+      if (!connected) return false;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+        return false;
+      }
+      return true;
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (!shouldCaptureKey(event)) return;
       event.preventDefault();
       sendEvent({ type: "key", key: event.key, action: "tap" });
     });

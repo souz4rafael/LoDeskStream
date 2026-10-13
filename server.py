@@ -60,6 +60,7 @@ AUDIO_SAMPLE_RATE = 48000
 AUDIO_FRAME_SAMPLES = 960
 
 pyautogui.PAUSE = 0
+pyautogui.FAILSAFE = False
 
 _LAST_MOUSE_MOVE = 0.0
 _MOUSE_INTERVAL_SECONDS = 1.0 / 40.0
@@ -408,55 +409,59 @@ def input_event():
     if requested_monitor is not None:
         selected_monitor = _sanitize_monitor_index(int(requested_monitor))
 
-    if event_type == "mouse_move":
-        global _LAST_MOUSE_MOVE
-        now = time.perf_counter()
-        if now - _LAST_MOUSE_MOVE < _MOUSE_INTERVAL_SECONDS:
-            return jsonify({"ok": True, "throttled": True})
-        _LAST_MOUSE_MOVE = now
-        with mss.mss() as sct:
-            monitor = sct.monitors[selected_monitor]
-        x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
-        pyautogui.moveTo(x, y)
-        return jsonify({"ok": True})
+    try:
+        if event_type == "mouse_move":
+            global _LAST_MOUSE_MOVE
+            now = time.perf_counter()
+            if now - _LAST_MOUSE_MOVE < _MOUSE_INTERVAL_SECONDS:
+                return jsonify({"ok": True, "throttled": True})
+            _LAST_MOUSE_MOVE = now
+            with mss.mss() as sct:
+                monitor = sct.monitors[selected_monitor]
+            x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
+            pyautogui.moveTo(x, y)
+            return jsonify({"ok": True, "x": x, "y": y})
 
-    if event_type == "mouse_click":
-        with mss.mss() as sct:
-            monitor = sct.monitors[selected_monitor]
-        x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
-        button = _translate_button(int(payload.get("button", 0)))
-        clicks = 2 if bool(payload.get("double")) else 1
-        preserve_cursor = bool(payload.get("preserveCursor", False))
-        if preserve_cursor:
-            original = pyautogui.position()
-            pyautogui.click(x=x, y=y, button=button, clicks=clicks)
-            pyautogui.moveTo(original.x, original.y)
-        else:
-            pyautogui.click(x=x, y=y, button=button, clicks=clicks)
-        return jsonify({"ok": True})
+        if event_type == "mouse_click":
+            with mss.mss() as sct:
+                monitor = sct.monitors[selected_monitor]
+            x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
+            button = _translate_button(int(payload.get("button", 0)))
+            clicks = 2 if bool(payload.get("double")) else 1
+            preserve_cursor = bool(payload.get("preserveCursor", False))
+            if preserve_cursor:
+                original = pyautogui.position()
+                pyautogui.click(x=x, y=y, button=button, clicks=clicks)
+                pyautogui.moveTo(original.x, original.y)
+            else:
+                pyautogui.click(x=x, y=y, button=button, clicks=clicks)
+            return jsonify({"ok": True, "x": x, "y": y, "button": button})
 
-    if event_type == "scroll":
-        amount = int(payload.get("amount", 0))
-        pyautogui.scroll(amount)
-        return jsonify({"ok": True})
+        if event_type == "scroll":
+            amount = int(payload.get("amount", 0))
+            pyautogui.scroll(amount)
+            return jsonify({"ok": True})
 
-    if event_type == "key":
-        key = _translate_key(str(payload.get("key", "")))
-        action = payload.get("action", "tap")
-        if not key:
-            return jsonify({"ok": False, "error": "key is required"}), 400
-        if action == "down":
-            pyautogui.keyDown(key)
-        elif action == "up":
-            pyautogui.keyUp(key)
-        else:
-            pyautogui.press(key)
-        return jsonify({"ok": True})
+        if event_type == "key":
+            key = _translate_key(str(payload.get("key", "")))
+            action = payload.get("action", "tap")
+            if not key:
+                return jsonify({"ok": False, "error": "key is required"}), 400
+            if action == "down":
+                pyautogui.keyDown(key)
+            elif action == "up":
+                pyautogui.keyUp(key)
+            else:
+                pyautogui.press(key)
+            return jsonify({"ok": True, "key": key})
 
-    if event_type == "text":
-        text = str(payload.get("text", ""))
-        pyautogui.write(text, interval=0.0)
-        return jsonify({"ok": True})
+        if event_type == "text":
+            text = str(payload.get("text", ""))
+            pyautogui.write(text, interval=0.0)
+            return jsonify({"ok": True})
+    except Exception as exc:
+        LOGGER.exception("Input event failed: %s", event_type)
+        return jsonify({"ok": False, "error": str(exc), "event": event_type}), 500
 
     return jsonify({"ok": False, "error": "unknown event type"}), 400
 
