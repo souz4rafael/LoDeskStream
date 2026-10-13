@@ -35,7 +35,7 @@ pip install pyinstaller
 python -m PyInstaller --noconfirm --clean --name LoDeskStream --onedir --console --add-data "web;web" .\server.py
 ```
 
-Run `dist\LoDeskStream\LoDeskStream.exe`, or use `run-lodeskstream.ps1` from the portable package to start with a generated token.
+Run `dist\LoDeskStream\manager\LoDeskStreamManager.exe` for the tray controller, or run `dist\LoDeskStream\LoDeskStream.exe` directly if you want the raw server console.
 
 ## Windows installer
 
@@ -45,12 +45,28 @@ The installer is a per-user setup that extracts the portable build to:
 %LOCALAPPDATA%\Programs\LoDeskStream
 ```
 
-It also creates Desktop and Start Menu shortcuts.
+It also creates Desktop and Start Menu shortcuts for the tray controller and registers LoDeskStream in Windows Apps & features for uninstall.
 
 To rebuild it:
 
 ```powershell
 dotnet publish .\installer-src\LoDeskStreamInstaller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o .\dist\installer
+```
+
+## Tray controller
+
+The tray controller starts LoDeskStream automatically and lets you:
+
+- see whether the server is running;
+- start/stop the server;
+- open the local or LAN URL;
+- copy the current session token;
+- exit the tray app, which also stops the server.
+
+To uninstall an installed copy, use Windows **Apps & features** or run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\LoDeskStream\uninstall-lodeskstream.ps1"
 ```
 
 ## Notes

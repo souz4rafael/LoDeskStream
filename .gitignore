@@ -12,3 +12,5 @@ debug_capture_test.py
 installer/
 installer-src/bin/
 installer-src/obj/
+manager-src/bin/
+manager-src/obj/
