@@ -311,6 +311,10 @@ def _translate_button(button_code: int) -> str:
     return mapping.get(button_code, "left")
 
 
+def _event_screen_position(payload: dict, monitor: dict) -> Tuple[int, int]:
+    return _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
+
+
 def _translate_key(key: str) -> str:
     key = (key or "").lower()
     special = {
@@ -418,14 +422,29 @@ def input_event():
             _LAST_MOUSE_MOVE = now
             with mss.mss() as sct:
                 monitor = sct.monitors[selected_monitor]
-            x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
+            x, y = _event_screen_position(payload, monitor)
             pyautogui.moveTo(x, y)
             return jsonify({"ok": True, "x": x, "y": y})
+
+        if event_type in {"mouse_down", "mouse_up"}:
+            with mss.mss() as sct:
+                monitor = sct.monitors[selected_monitor]
+            button = _translate_button(int(payload.get("button", 0)))
+            has_position = "x" in payload and "y" in payload
+            x = y = None
+            if has_position:
+                x, y = _event_screen_position(payload, monitor)
+                pyautogui.moveTo(x, y)
+            if event_type == "mouse_down":
+                pyautogui.mouseDown(button=button)
+            else:
+                pyautogui.mouseUp(button=button)
+            return jsonify({"ok": True, "x": x, "y": y, "button": button})
 
         if event_type == "mouse_click":
             with mss.mss() as sct:
                 monitor = sct.monitors[selected_monitor]
-            x, y = _to_screen_xy(float(payload.get("x", 0.0)), float(payload.get("y", 0.0)), monitor)
+            x, y = _event_screen_position(payload, monitor)
             button = _translate_button(int(payload.get("button", 0)))
             clicks = 2 if bool(payload.get("double")) else 1
             preserve_cursor = bool(payload.get("preserveCursor", False))

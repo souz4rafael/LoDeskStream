@@ -82,7 +82,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Progr
 - Anyone with LAN access + token can control your desktop.
 - Keep it in a trusted network and use a strong token.
 - You can choose which monitor is streamed from the monitor dropdown.
-- On the same PC, leave **Full mouse (move+click)** disabled to avoid continuous cursor hijacking. In this mode it sends click + keyboard and restores the local cursor position after clicks.
+- On the same PC, leave **Full mouse (move+click)** disabled to avoid continuous cursor hijacking. In this mode it sends click + keyboard and restores the local cursor position after clicks. Turn **Full mouse** on when you need continuous cursor movement or click-and-drag.
 - The stream draws the host cursor, and the browser shows a remote cursor overlay. Clicks are mapped to the actual rendered screen area, so fullscreen/letterboxed layouts stay aligned.
 - WebRTC is used by default for lower latency and audio. If WebRTC negotiation fails, the browser falls back to the previous MJPEG stream automatically.
 - Set `STREAM_AUDIO=0` before starting the server to disable system-audio capture.

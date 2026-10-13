@@ -53,6 +53,7 @@
       overflow: hidden;
       position: relative;
       outline: none;
+      touch-action: none;
     }
     #viewer, #fallbackViewer {
       display: block;
@@ -64,6 +65,7 @@
       border-radius: 8px;
       user-select: none;
       -webkit-user-drag: none;
+      touch-action: none;
       background: #000;
       outline: none;
       margin: auto;
@@ -243,6 +245,8 @@
     let usingWebRtc = false;
     let audioMuted = false;
     let menuDrag = null;
+    let remoteDrag = null;
+    let lastRemotePoint = null;
 
     function status(msg, ok = true) {
       statusEl.textContent = msg;
@@ -534,7 +538,64 @@
       remoteCursor.style.left = `${content.left - stageRect.left + (p.x * content.width)}px`;
       remoteCursor.style.top = `${content.top - stageRect.top + (p.y * content.height)}px`;
       remoteCursor.style.display = connected ? "block" : "none";
+      lastRemotePoint = p;
       return p;
+    }
+
+    function sendRemoteMove(event) {
+      const p = updateRemoteCursor(event);
+      if (!p || !fullMouseEnabled()) return;
+      const now = performance.now();
+      if (now - lastMoveAt < 30) return;
+      lastMoveAt = now;
+      sendEvent({ type: "mouse_move", x: p.x, y: p.y });
+    }
+
+    function startRemoteDrag(event) {
+      if (remoteDrag) return false;
+      if (event.button === 2) return false;
+      const button = Number.isFinite(Number(event.button)) ? event.button : 0;
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+      const p = updateRemoteCursor(event);
+      if (!p) return false;
+      if (!fullMouseEnabled()) {
+        sendEvent({
+          type: "mouse_click",
+          x: p.x,
+          y: p.y,
+          button,
+          double: false,
+          preserveCursor: true
+        });
+        focusMobileKeyboard();
+        return false;
+      }
+      remoteDrag = { button };
+      sendEvent({ type: "mouse_down", x: p.x, y: p.y, button });
+      focusMobileKeyboard();
+      return true;
+    }
+
+    function finishRemoteDrag(event) {
+      if (!remoteDrag) return;
+      if (event && event.preventDefault) {
+        event.preventDefault();
+      }
+      const p = event ? updateRemoteCursor(event) : lastRemotePoint;
+      const payload = { type: "mouse_up", button: remoteDrag.button };
+      if (p) {
+        payload.x = p.x;
+        payload.y = p.y;
+      }
+      sendEvent(payload);
+      remoteDrag = null;
+    }
+
+    function touchPoint(event) {
+      const touches = event.changedTouches || event.touches;
+      return touches && touches.length ? touches[0] : null;
     }
 
     async function loadMonitors() {
@@ -775,30 +836,83 @@
     });
 
     stage.addEventListener("mousemove", (event) => {
-      const p = updateRemoteCursor(event);
-      if (!p) return;
-      if (!fullMouseEnabled()) return;
-      const now = performance.now();
-      if (now - lastMoveAt < 30) return;
-      lastMoveAt = now;
-      sendEvent({ type: "mouse_move", x: p.x, y: p.y });
+      sendRemoteMove(event);
     });
 
     stage.addEventListener("mousedown", (event) => {
-      if (event.button === 2) return;
-      event.preventDefault();
-      const p = updateRemoteCursor(event);
-      if (!p) return;
-      sendEvent({
-        type: "mouse_click",
-        x: p.x,
-        y: p.y,
-        button: event.button,
-        double: false,
-        preserveCursor: !fullMouseEnabled()
-      });
-      focusMobileKeyboard();
+      startRemoteDrag(event);
     });
+
+    window.addEventListener("mouseup", (event) => {
+      finishRemoteDrag(event);
+    });
+
+    window.addEventListener("blur", () => {
+      finishRemoteDrag(null);
+    });
+
+    stage.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      if (startRemoteDrag(event)) {
+        remoteDrag.pointerId = event.pointerId;
+        stage.setPointerCapture(event.pointerId);
+      }
+    });
+
+    stage.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "mouse") return;
+      if (remoteDrag && remoteDrag.pointerId === event.pointerId) {
+        event.preventDefault();
+        sendRemoteMove(event);
+      }
+    });
+
+    stage.addEventListener("pointerup", (event) => {
+      if (event.pointerType === "mouse") return;
+      if (!remoteDrag || remoteDrag.pointerId !== event.pointerId) return;
+      finishRemoteDrag(event);
+      stage.releasePointerCapture(event.pointerId);
+    });
+
+    stage.addEventListener("pointercancel", (event) => {
+      if (event.pointerType === "mouse") return;
+      if (!remoteDrag || remoteDrag.pointerId !== event.pointerId) return;
+      finishRemoteDrag(event);
+    });
+
+    stage.addEventListener("touchstart", (event) => {
+      if (window.PointerEvent) return;
+      const touch = touchPoint(event);
+      if (!touch) return;
+      if (startRemoteDrag(touch)) {
+        event.preventDefault();
+        remoteDrag.touchId = touch.identifier;
+      }
+    }, { passive: false });
+
+    stage.addEventListener("touchmove", (event) => {
+      if (window.PointerEvent || !remoteDrag) return;
+      const touch = touchPoint(event);
+      if (!touch || touch.identifier !== remoteDrag.touchId) return;
+      event.preventDefault();
+      sendRemoteMove(touch);
+    }, { passive: false });
+
+    stage.addEventListener("touchend", (event) => {
+      if (window.PointerEvent || !remoteDrag) return;
+      const touch = touchPoint(event);
+      if (!touch || touch.identifier !== remoteDrag.touchId) return;
+      event.preventDefault();
+      finishRemoteDrag(touch);
+    }, { passive: false });
+
+    stage.addEventListener("touchcancel", (event) => {
+      if (window.PointerEvent || !remoteDrag) return;
+      const touch = touchPoint(event);
+      if (touch && touch.identifier !== remoteDrag.touchId) return;
+      event.preventDefault();
+      finishRemoteDrag(touch || null);
+    }, { passive: false });
 
     stage.addEventListener("click", (event) => {
       event.preventDefault();
