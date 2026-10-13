@@ -9,3 +9,6 @@ dist/
 debug-captures/
 analyze_capture.py
 debug_capture_test.py
+installer/
+installer-src/bin/
+installer-src/obj/
