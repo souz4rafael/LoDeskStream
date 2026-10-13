@@ -6,7 +6,7 @@ using Microsoft.Win32;
 const string appName = "LoDeskStream";
 const string resourceName = "LoDeskStream-Windows-portable.zip";
 const string publisher = "souz4rafael";
-const string version = "0.1.1";
+const string version = "0.1.2";
 
 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 var installDir = Path.Combine(localAppData, "Programs", appName);

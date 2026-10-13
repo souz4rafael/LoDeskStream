@@ -61,6 +61,7 @@ The tray controller starts LoDeskStream automatically and lets you:
 - start/stop the server;
 - open the local or LAN URL;
 - copy the current session token;
+- set a custom password/token or generate a new one;
 - exit the tray app, which also stops the server.
 
 To uninstall an installed copy, use Windows **Apps & features** or run:
