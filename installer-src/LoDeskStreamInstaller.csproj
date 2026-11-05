@@ -7,6 +7,9 @@
     <AssemblyName>LoDeskStream-Setup</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\dist\LoDeskStream-Windows-portable.zip" LogicalName="LoDeskStream-Windows-portable.zip" />
+    <EmbeddedResource Include="$(PayloadZip)" LogicalName="LoDeskStream-Windows-portable.zip" Condition="'$(PayloadZip)' != ''" />
   </ItemGroup>
+  <Target Name="ValidatePayloadZip" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(PayloadZip)' == '' or !Exists('$(PayloadZip)')" Text="Supply -p:PayloadZip with the exact fresh portable ZIP from build.ps1." />
+  </Target>
 </Project>

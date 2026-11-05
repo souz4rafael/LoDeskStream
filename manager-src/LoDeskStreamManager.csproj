@@ -7,5 +7,49 @@
     <Nullable>enable</Nullable>
     <AssemblyName>LoDeskStreamManager</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>$(BaseIntermediateOutputPath)LoDeskStream.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(ApplicationIcon)" LogicalName="LoDeskStream.Brand.ico" />
+  </ItemGroup>
+  <!-- PNG-compressed ICO is supported by Windows; generate it without Pillow or committed binaries. -->
+  <UsingTask TaskName="CreateLoDeskStreamIcon" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Source ParameterType="System.String" Required="true" />
+      <Destination ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var png = File.ReadAllBytes(Source);
+        var width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+        var height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+        if (width < 1 || width > 256 || height < 1 || height > 256)
+            throw new System.InvalidOperationException("The brand icon must be at most 256 pixels per side.");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(Destination)));
+        using (var writer = new BinaryWriter(File.Create(Destination)))
+        {
+            writer.Write((ushort)0);
+            writer.Write((ushort)1);
+            writer.Write((ushort)1);
+            writer.Write((byte)(width == 256 ? 0 : width));
+            writer.Write((byte)(height == 256 ? 0 : height));
+            writer.Write((byte)0);
+            writer.Write((byte)0);
+            writer.Write((ushort)1);
+            writer.Write((ushort)32);
+            writer.Write(png.Length);
+            writer.Write(22);
+            writer.Write(png);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="GenerateLoDeskStreamIcon" BeforeTargets="PrepareForBuild"
+          Inputs="$(MSBuildProjectDirectory)\..\web\icons\icon-192.png;$(MSBuildProjectFullPath)"
+          Outputs="$(ApplicationIcon)">
+    <CreateLoDeskStreamIcon Source="$(MSBuildProjectDirectory)\..\web\icons\icon-192.png"
+                           Destination="$(ApplicationIcon)" />
+  </Target>
 </Project>

@@ -24,13 +24,60 @@
       padding: 0;
       border: 0;
       background: transparent;
-      max-width: min(92vw, 980px);
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
       justify-content: center;
     }
     .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
     .brand svg { width: 20px; height: 20px; display: block; }
     input, button, select { background: #1f1f1f; color: #e8e8e8; border: 1px solid #3a3a3a; border-radius: 6px; padding: 6px 8px; }
     button { cursor: pointer; }
+    #controlsBar button {
+      box-sizing: border-box;
+      width: 84px;
+      min-height: 56px;
+      flex: 0 0 84px;
+      padding: 8px 4px;
+      font: 13px/18px Segoe UI, sans-serif;
+      white-space: pre-line;
+      text-align: center;
+      touch-action: manipulation;
+    }
+    #controlsBar input, #controlsBar select {
+      box-sizing: border-box;
+      min-height: 56px;
+      min-width: 0;
+      max-width: 100%;
+    }
+    #token { width: 156px; }
+    #monitorPanel {
+      flex: 1 0 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      box-sizing: border-box;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      background: #181818;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+    #controlsBar .monitor-option {
+      width: 180px;
+      flex: 1 1 160px;
+      white-space: normal;
+      overflow-wrap: break-word;
+    }
+    #controlsBar .monitor-option[aria-pressed="true"] {
+      background: #164e3b;
+      border-color: #34d399;
+    }
+    #controlsBar button:disabled { opacity: 0.5; cursor: default; }
+    #fullMouse[aria-pressed="true"] { background: #164e3b; border-color: #34d399; }
     #status { color: #ff8c8c; }
     main {
       width: 100%;
@@ -107,30 +154,30 @@
     #remoteCursor {
       position: absolute;
       display: none;
-      width: 18px;
-      height: 27px;
+      width: 30px;
+      height: 30px;
       pointer-events: none;
-      transform: translate(-1px, -1px);
-      filter: drop-shadow(0 1px 2px #000);
+      transform: translate(-50%, -50%);
     }
     #stageMenu {
       position: absolute;
       top: 10px;
-      left: 50%;
+      right: 10px;
+      width: 48px;
+      height: 56px;
       z-index: 10;
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
+      align-items: flex-end;
       gap: 8px;
-      transform: translateX(-50%);
       pointer-events: none;
       touch-action: none;
     }
     #stageMenu:not(.fullscreen-active) { display: none; }
     #stageMenu.dragging { opacity: 0.86; }
     #stageMenuToggle {
-      width: 42px;
-      height: 34px;
+      width: 48px;
+      height: 56px;
       padding: 0;
       border-color: #4a4a4a;
       background: rgba(20, 20, 20, 0.82);
@@ -139,11 +186,18 @@
       pointer-events: auto;
       backdrop-filter: blur(8px);
       cursor: grab;
+      flex: 0 0 56px;
     }
     #stageMenu.dragging #stageMenuToggle { cursor: grabbing; }
     #stageMenuPanel {
       display: none;
-      max-width: min(92vw, 980px);
+      position: absolute;
+      top: 64px;
+      right: 0;
+      width: 980px;
+      max-width: calc(100vw - 20px);
+      box-sizing: border-box;
+      overflow-y: auto;
       padding: 8px;
       border: 1px solid #3a3a3a;
       border-radius: 10px;
@@ -154,10 +208,9 @@
       animation: slideDown 140ms ease-out;
     }
     #stageMenu.open #stageMenuPanel { display: block; }
-    #stageMenuPanel select { max-width: 300px; }
     @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     .note {
       color: #b7b7b7;
@@ -188,14 +241,16 @@
       LoDeskStream
     </span>
     <input id="token" type="password" placeholder="STREAM_TOKEN">
-    <button id="connect">Connect</button>
-    <button id="disconnect">Disconnect</button>
-    <button id="fullscreen">Full screen</button>
-    <button id="muteAudio">Mute audio</button>
-    <select id="monitor"></select>
-    <label><input id="fullMouse" type="checkbox"> Full mouse (move+click)</label>
+    <button id="connect" type="button" aria-pressed="false">Connect</button>
+    <button id="monitorToggle" type="button" aria-expanded="false" aria-controls="monitorPanel" disabled>Choose&#10;monitor</button>
+    <button id="streamMode" type="button" title="Switch between WebRTC and MJPEG (MJPEG has no audio)">Mode:&#10;WebRTC</button>
+    <button id="fullscreen">Full&#10;screen</button>
+    <button id="muteAudio">Mute&#10;audio</button>
+    <button id="showKeyboard" disabled>Show&#10;keyboard</button>
+    <button id="fullMouse" type="button" aria-pressed="false" title="Enable continuous mouse movement and click-and-drag">Full mouse:&#10;Off</button>
     <span id="status">Disconnected</span>
-    <span class="note">Default mode sends click + keyboard only (no continuous mouse move)</span>
+    <select id="monitor" hidden aria-hidden="true" tabindex="-1"></select>
+    <div id="monitorPanel" class="hidden" role="group" aria-label="Choose monitor"></div>
   </header>
   <div id="rotateHint">
     <div>
@@ -207,9 +262,11 @@
     <div id="stage" tabindex="0">
       <video id="viewer" autoplay playsinline tabindex="0"></video>
       <img id="fallbackViewer" class="hidden" alt="Desktop stream" tabindex="0">
-      <textarea id="mobileKeyboard" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-hidden="true"></textarea>
-      <svg id="remoteCursor" viewBox="0 0 18 27" aria-hidden="true">
-        <path d="M1 1v22l5-5 4 9 4-2-4-9h7z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <textarea id="mobileKeyboard" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="-1" aria-label="Remote keyboard input"></textarea>
+      <svg id="remoteCursor" viewBox="0 0 30 30" aria-hidden="true">
+        <circle cx="15" cy="15" r="14" fill="#fff" fill-opacity="0.19" stroke="#000" stroke-opacity="0.63" stroke-width="2"/>
+        <circle cx="15" cy="15" r="12" fill="none" stroke="#fff" stroke-opacity="0.82" stroke-width="2"/>
+        <circle cx="15" cy="15" r="2" fill="#fff" fill-opacity="0.9" stroke="#000" stroke-opacity="0.78"/>
       </svg>
       <div id="stageMenu">
         <button id="stageMenuToggle" title="Show controls" aria-label="Show controls" aria-expanded="false">☰</button>
@@ -218,6 +275,8 @@
     </div>
   </main>
 
+  <script src="/input-queue.js"></script>
+  <script src="/keyboard-input.js"></script>
   <script>
     const viewer = document.getElementById("viewer");
     const fallbackViewer = document.getElementById("fallbackViewer");
@@ -229,10 +288,14 @@
     const statusEl = document.getElementById("status");
     const tokenEl = document.getElementById("token");
     const connectBtn = document.getElementById("connect");
-    const disconnectBtn = document.getElementById("disconnect");
     const fullscreenBtn = document.getElementById("fullscreen");
     const muteAudioBtn = document.getElementById("muteAudio");
+    const streamModeBtn = document.getElementById("streamMode");
+    const showKeyboardBtn = document.getElementById("showKeyboard");
     const monitorEl = document.getElementById("monitor");
+    const monitorToggle = document.getElementById("monitorToggle");
+    const monitorPanel = document.getElementById("monitorPanel");
+    let monitorButtons = [];
     const fullMouseEl = document.getElementById("fullMouse");
     const stageMenu = document.getElementById("stageMenu");
     const stageMenuToggle = document.getElementById("stageMenuToggle");
@@ -243,14 +306,87 @@
     let monitorsLoaded = false;
     let peerConnection = null;
     let usingWebRtc = false;
+    let preferWebRtc = true;
     let audioMuted = false;
     let menuDrag = null;
     let remoteDrag = null;
+    let remoteCursorTimer = 0;
     let lastRemotePoint = null;
+    let lastTouchAt = -Infinity;
+    let controlSessionId = "";
+    let heartbeatTimer = 0;
+    let connectionGeneration = 0;
+    let inputQueue = null;
+    const remoteKeyboard = new RemoteKeyboard((payload) => sendEvent(payload));
+    let connectionState = "disconnected";
+    let streamGeneration = 0;
+    let videoWatchdogTimer = 0;
+    let remoteAudioAvailable = false;
 
     function status(msg, ok = true) {
       statusEl.textContent = msg;
       statusEl.style.color = ok ? "#9cd67a" : "#ff8c8c";
+    }
+
+    function renderConnectionControls() {
+      const busy = connectionState === "connecting" || connectionState === "switching";
+      connectBtn.disabled = busy;
+      connectBtn.textContent = busy
+        ? (connectionState === "switching" ? "Switching..." : "Connecting...")
+        : (connected ? "Disconnect" : "Connect");
+      connectBtn.setAttribute("aria-pressed", String(connected));
+      connectBtn.setAttribute("aria-busy", String(busy));
+      streamModeBtn.disabled = busy;
+      tokenEl.disabled = busy;
+      monitorEl.disabled = busy || !monitorsLoaded;
+      monitorToggle.disabled = monitorEl.disabled;
+      for (const button of monitorButtons) button.disabled = monitorEl.disabled;
+      if (monitorEl.disabled) setMonitorPanelOpen(false);
+      fullMouseEl.disabled = busy;
+      showKeyboardBtn.disabled = !connected || busy;
+      muteAudioBtn.disabled = !connected || busy || !usingWebRtc || !remoteAudioAvailable;
+    }
+
+    function setConnectionState(state, message, ok = true) {
+      connectionState = state;
+      connected = state === "connected" || state === "switching" ||
+        (state === "connecting" && Boolean(controlSessionId));
+      renderConnectionControls();
+      if (message !== undefined) status(message, ok);
+    }
+
+    function failConnection(message) {
+      disconnect();
+      setConnectionState("error", message, false);
+    }
+
+    async function withTimeout(promise, milliseconds, message) {
+      let timeoutId = 0;
+      try {
+        return await Promise.race([
+          promise,
+          new Promise((resolve, reject) => {
+            timeoutId = setTimeout(() => reject(new Error(message)), milliseconds);
+          })
+        ]);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    function requestJson(url, options, timeout = 10000) {
+      const request = (async () => {
+        const response = await fetch(url, options);
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error((data && data.error) || `HTTP ${response.status}`);
+        if (!data || !data.ok) throw new Error((data && data.error) || "Invalid server response");
+        return data;
+      })();
+      return withTimeout(request, timeout, `Request timed out: ${url}`);
+    }
+
+    function currentStream(generation, sessionId) {
+      return connected && generation === streamGeneration && sessionId === controlSessionId;
     }
 
     function activeViewer() {
@@ -259,27 +395,34 @@
 
     function showWebRtcViewer() {
       usingWebRtc = true;
+      remoteAudioAvailable = false;
+      streamModeBtn.textContent = "Mode:\nWebRTC";
       viewer.classList.remove("hidden");
       fallbackViewer.classList.add("hidden");
       fallbackViewer.removeAttribute("src");
+      renderConnectionControls();
     }
 
     function showFallbackViewer() {
       usingWebRtc = false;
+      remoteAudioAvailable = false;
+      preferWebRtc = false;
+      streamModeBtn.textContent = "Mode:\nMJPEG";
       fallbackViewer.classList.remove("hidden");
       viewer.classList.add("hidden");
       viewer.pause();
       viewer.srcObject = null;
+      renderConnectionControls();
     }
 
     function updateAudioButton() {
       viewer.muted = audioMuted;
-      muteAudioBtn.textContent = audioMuted ? "Unmute audio" : "Mute audio";
+      muteAudioBtn.textContent = audioMuted ? "Unmute\naudio" : "Mute\naudio";
     }
 
     function updateFullscreenButtons() {
       const inFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
-      fullscreenBtn.textContent = inFullscreen ? "Exit full screen" : "Full screen";
+      fullscreenBtn.textContent = inFullscreen ? "Exit\nfullscreen" : "Full\nscreen";
       stageMenu.classList.toggle("fullscreen-active", Boolean(inFullscreen));
       if (!inFullscreen) {
         setStageMenuOpen(false);
@@ -287,6 +430,7 @@
     }
 
     function setStageMenuOpen(open) {
+      setMonitorPanelOpen(false);
       stageMenu.classList.toggle("open", open);
       stageMenuToggle.setAttribute("aria-expanded", String(open));
       if (open) {
@@ -307,14 +451,32 @@
       const nextLeft = Math.min(maxLeft, Math.max(0, left));
       const nextTop = Math.min(maxTop, Math.max(0, top));
       stageMenu.style.left = `${nextLeft}px`;
+      stageMenu.style.right = "auto";
       stageMenu.style.top = `${nextTop}px`;
       stageMenu.style.transform = "none";
     }
 
     function keepStageMenuInBounds() {
+      if (!stageMenu.classList.contains("fullscreen-active")) return;
       const rect = stageMenu.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
       pinStageMenu(rect.left - stageRect.left, rect.top - stageRect.top);
+      if (!stageMenu.classList.contains("open")) return;
+      const anchor = stageMenu.getBoundingClientRect();
+      const anchorLeft = anchor.left - stageRect.left;
+      const anchorTop = anchor.top - stageRect.top;
+      const panelWidth = Math.min(980, Math.max(0, stageRect.width - 20));
+      stageMenuPanel.style.width = `${panelWidth}px`;
+      const panelLeft = Math.min(Math.max(0, anchorLeft + anchor.width - panelWidth),
+        Math.max(0, stageRect.width - panelWidth));
+      stageMenuPanel.style.left = `${panelLeft - anchorLeft}px`;
+      stageMenuPanel.style.right = "auto";
+      const below = Math.max(0, stageRect.height - anchorTop - anchor.height - 8);
+      const above = Math.max(0, anchorTop - 8);
+      const useAbove = stageMenuPanel.scrollHeight > below && above > below;
+      stageMenuPanel.style.maxHeight = `${useAbove ? above : below}px`;
+      stageMenuPanel.style.top = useAbove ? "auto" : `${anchor.height + 8}px`;
+      stageMenuPanel.style.bottom = useAbove ? `${anchor.height + 8}px` : "auto";
     }
 
     function selectedMonitor() {
@@ -338,7 +500,10 @@
         height: media.clientHeight
       };
       const monitor = selectedMonitor();
-      const streamAspect = monitor.width / monitor.height;
+      const mediaWidth = usingWebRtc ? media.videoWidth : media.naturalWidth;
+      const mediaHeight = usingWebRtc ? media.videoHeight : media.naturalHeight;
+      const streamAspect = mediaWidth > 0 && mediaHeight > 0
+        ? mediaWidth / mediaHeight : monitor.width / monitor.height;
       const viewAspect = rect.width / rect.height;
       let width = rect.width;
       let height = rect.height;
@@ -371,18 +536,24 @@
     }
 
     function fullMouseEnabled() {
-      return fullMouseEl.checked;
+      return fullMouseEl.getAttribute("aria-pressed") === "true";
     }
+
+    fullMouseEl.addEventListener("click", () => {
+      const enabled = !fullMouseEnabled();
+      if (!enabled) finishRemoteDrag(null);
+      fullMouseEl.setAttribute("aria-pressed", String(enabled));
+      fullMouseEl.textContent = enabled ? "Full mouse:\nOn" : "Full mouse:\nOff";
+      clearTimeout(remoteCursorTimer);
+    });
 
     function focusMobileKeyboard() {
       if (!connected) return;
       mobileKeyboard.value = "";
-      try {
-        mobileKeyboard.focus();
-      } catch (error) {
-        // Some legacy mobile browsers only allow focus directly from a user tap.
-      }
+      mobileKeyboard.focus();
     }
+
+    showKeyboardBtn.addEventListener("click", focusMobileKeyboard);
 
     function sendTextInput(value) {
       if (!value) return;
@@ -398,36 +569,81 @@
       }
     }
 
-    async function sendEvent(payload) {
-      if (!token || !connected) return;
-      try {
-        const body = Object.assign({}, payload, { monitorIndex: selectedMonitorIndex() });
+    function createInputQueue(sessionId, sessionToken) {
+      const queue = new InputQueue(async (body) => {
         const response = await fetch("/api/input", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+          headers: { "Content-Type": "application/json", "X-Auth-Token": sessionToken, "X-Session-ID": sessionId },
           body: JSON.stringify(body)
         });
         if (!response.ok) {
           const data = await response.json().catch(function () { return {}; });
-          status(`Input error: ${data.error || response.status}`, false);
+          throw new Error(data.error || `HTTP ${response.status}`);
         }
+      }, (error) => {
+        if (controlSessionId !== sessionId || inputQueue !== queue) return;
+        failConnection(`Input channel error: ${error.message}`);
+      });
+      return queue;
+    }
+
+    function sendEvent(payload) {
+      if (!token || !connected || !controlSessionId || !inputQueue) return Promise.resolve(false);
+      return inputQueue.enqueue(Object.assign({ monitorIndex: selectedMonitorIndex() }, payload));
+    }
+
+    async function closeControlSession(sessionId, sessionToken) {
+      try {
+        const response = await fetch("/api/session", {
+          method: "DELETE",
+          headers: { "X-Auth-Token": sessionToken, "X-Session-ID": sessionId },
+          keepalive: true
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
       } catch (error) {
-        status(`Input channel error: ${error.message}`, false);
+        console.warn("Session close failed; server timeout will release held input", error);
       }
     }
 
-    function setMjpegStreamSource() {
+    function scheduleHeartbeat(sessionId, sessionToken) {
+      heartbeatTimer = setTimeout(async () => {
+        let timeoutId = 0;
+        try {
+          const response = await Promise.race([
+            fetch("/api/session/heartbeat", {
+              method: "POST",
+              headers: { "X-Auth-Token": sessionToken, "X-Session-ID": sessionId }
+            }),
+            new Promise((resolve, reject) => {
+              timeoutId = setTimeout(() => reject(new Error("Heartbeat timed out")), 5000);
+            })
+          ]);
+          if (!response.ok) throw new Error(`Heartbeat failed: HTTP ${response.status}`);
+          if (controlSessionId === sessionId) scheduleHeartbeat(sessionId, sessionToken);
+        } catch (error) {
+          if (controlSessionId === sessionId) {
+            failConnection(`Control session lost: ${error.message}. Reconnect.`);
+          }
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }, 5000);
+    }
+
+    function setMjpegStreamSource(generation = streamGeneration) {
       showFallbackViewer();
+      const sessionId = controlSessionId;
       const url = `/stream?token=${encodeURIComponent(token)}&monitor=${selectedMonitorIndex()}&ts=${Date.now()}`;
       stage.scrollTop = 0;
       stage.scrollLeft = 0;
       fallbackViewer.removeAttribute("src");
       requestAnimationFrame(() => {
-        fallbackViewer.src = url;
+        if (currentStream(generation, sessionId) && !usingWebRtc) fallbackViewer.src = url;
       });
     }
 
     function closePeerConnection() {
+      clearTimeout(videoWatchdogTimer);
       if (!peerConnection) return;
       peerConnection.ontrack = null;
       peerConnection.onconnectionstatechange = null;
@@ -454,7 +670,7 @@
       });
     }
 
-    async function startWebRtcStream() {
+    async function startWebRtcStream(generation, sessionId) {
       closePeerConnection();
       showWebRtcViewer();
       updateAudioButton();
@@ -467,19 +683,22 @@
       pc.addTransceiver("video", { direction: "recvonly" });
       pc.addTransceiver("audio", { direction: "recvonly" });
       pc.ontrack = (event) => {
-        remoteStream.addTrack(event.track);
+        if (currentStream(generation, sessionId) && peerConnection === pc) remoteStream.addTrack(event.track);
       };
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-          status("WebRTC connection lost", false);
+        if (currentStream(generation, sessionId) && peerConnection === pc &&
+            (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
+          failConnection("WebRTC connection lost");
         }
       };
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      const offer = await withTimeout(pc.createOffer(), 10000, "WebRTC offer timed out");
+      if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
+      await withTimeout(pc.setLocalDescription(offer), 10000, "WebRTC setup timed out");
       await waitForIceGatheringComplete(pc);
+      if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
 
-      const response = await fetch("/webrtc/offer", {
+      const answer = await requestJson("/webrtc/offer", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth-Token": token },
         body: JSON.stringify({
@@ -488,46 +707,96 @@
           monitor: selectedMonitorIndex(),
           audio: true
         })
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "WebRTC offer failed");
-      }
-      const answer = await response.json();
-      if (!answer.ok) throw new Error(answer.error || "WebRTC answer failed");
-      await pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+      }, 25000);
+      if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
+      await withTimeout(pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp }), 10000, "WebRTC answer timed out");
+      if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
 
       try {
-        await viewer.play();
+        await withTimeout(viewer.play(), 3500, "WebRTC playback timed out");
       } catch (error) {
+        if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
         audioMuted = true;
         updateAudioButton();
-        await viewer.play();
+        await withTimeout(viewer.play(), 3500, "WebRTC playback timed out");
       }
 
+      if (!currentStream(generation, sessionId) || peerConnection !== pc) return;
+      remoteAudioAvailable = Boolean(answer.audio);
       const audioSuffix = answer.audio ? " + audio" : " video only";
       status(`Connected (WebRTC${audioSuffix})${answer.audioError ? " - audio unavailable" : ""}`);
-      setTimeout(function () {
-        if (connected && usingWebRtc && (!viewer.videoWidth || !viewer.videoHeight)) {
+      videoWatchdogTimer = setTimeout(function () {
+        if (currentStream(generation, sessionId) && peerConnection === pc && usingWebRtc && (!viewer.videoWidth || !viewer.videoHeight)) {
           console.warn("WebRTC connected without visible video, falling back to MJPEG");
           closePeerConnection();
-          setMjpegStreamSource();
-          status("Connected (MJPEG fallback - no audio)");
+          setMjpegStreamSource(generation);
+          setConnectionState("connected", "Connected (MJPEG fallback - no audio)");
         }
       }, 3500);
     }
 
+    async function startSelectedStream() {
+      const sessionId = controlSessionId;
+      const generation = ++streamGeneration;
+      if (!preferWebRtc) {
+        closePeerConnection();
+        setMjpegStreamSource(generation);
+        setConnectionState("connected", "Connected (MJPEG - no audio)");
+        return;
+      }
+      try {
+        await startWebRtcStream(generation, sessionId);
+        if (currentStream(generation, sessionId)) setConnectionState("connected");
+      } catch (error) {
+        if (!currentStream(generation, sessionId)) return;
+        console.warn("WebRTC failed, falling back to MJPEG", error);
+        closePeerConnection();
+        setMjpegStreamSource(generation);
+        setConnectionState("connected", "Connected (MJPEG fallback - no audio)");
+      }
+    }
+
+    streamModeBtn.addEventListener("click", async () => {
+      if (connectionState === "connecting" || connectionState === "switching") return;
+      preferWebRtc = !preferWebRtc;
+      streamModeBtn.textContent = preferWebRtc ? "Mode:\nWebRTC" : "Mode:\nMJPEG";
+      if (!connected) return;
+      finishRemoteDrag(null);
+      remoteKeyboard.releaseAll();
+      setConnectionState("switching", "Switching stream...");
+      const generation = connectionGeneration;
+      try {
+        await startSelectedStream();
+      } catch (error) {
+        if (generation === connectionGeneration) failConnection(`Stream switch failed: ${error.message}`);
+      }
+    });
+
     function disconnect() {
-      connected = false;
+      setMonitorPanelOpen(false);
+      remoteDrag = null;
+      remoteKeyboard.clear();
+      if (inputQueue) inputQueue.stop();
+      inputQueue = null;
+      connectionGeneration += 1;
+      streamGeneration += 1;
+      clearTimeout(heartbeatTimer);
+      const sessionId = controlSessionId;
+      controlSessionId = "";
+      if (sessionId) closeControlSession(sessionId, token);
+      mobileKeyboard.blur();
+      remoteAudioAvailable = false;
+      setConnectionState("disconnected", "Disconnected", false);
       closePeerConnection();
       viewer.pause();
       viewer.srcObject = null;
       fallbackViewer.removeAttribute("src");
+      clearTimeout(remoteCursorTimer);
       remoteCursor.style.display = "none";
-      status("Disconnected", false);
     }
 
     function updateRemoteCursor(event) {
+      clearTimeout(remoteCursorTimer);
       const p = relativePos(event);
       if (!p) {
         remoteCursor.style.display = "none";
@@ -542,7 +811,18 @@
       return p;
     }
 
+    function scheduleTouchCursorHide(event) {
+      const isTouch = event.pointerType === "touch" || event.identifier !== undefined;
+      if (!connected || fullMouseEnabled() || !isTouch) return;
+      clearTimeout(remoteCursorTimer);
+      remoteCursorTimer = setTimeout(() => {
+        remoteCursor.style.display = "none";
+      }, 5000);
+    }
+
     function sendRemoteMove(event) {
+      if (connectionState !== "connected") return;
+      if (!isRemoteSurfaceEvent(event)) return;
       const p = updateRemoteCursor(event);
       if (!p || !fullMouseEnabled()) return;
       const now = performance.now();
@@ -552,6 +832,8 @@
     }
 
     function startRemoteDrag(event) {
+      if (connectionState !== "connected") return false;
+      if (!isRemoteSurfaceEvent(event)) return false;
       if (remoteDrag) return false;
       if (event.button === 2) return false;
       const button = Number.isFinite(Number(event.button)) ? event.button : 0;
@@ -569,12 +851,11 @@
           double: false,
           preserveCursor: true
         });
-        focusMobileKeyboard();
+        scheduleTouchCursorHide(event);
         return false;
       }
-      remoteDrag = { button };
+      remoteDrag = { button, monitorIndex: selectedMonitorIndex() };
       sendEvent({ type: "mouse_down", x: p.x, y: p.y, button });
-      focusMobileKeyboard();
       return true;
     }
 
@@ -584,7 +865,7 @@
         event.preventDefault();
       }
       const p = event ? updateRemoteCursor(event) : lastRemotePoint;
-      const payload = { type: "mouse_up", button: remoteDrag.button };
+      const payload = { type: "mouse_up", button: remoteDrag.button, monitorIndex: remoteDrag.monitorIndex };
       if (p) {
         payload.x = p.x;
         payload.y = p.y;
@@ -599,109 +880,142 @@
     }
 
     async function loadMonitors() {
-      if (!token) return;
-      try {
-        const response = await fetch("/api/monitors", {
-          headers: { "X-Auth-Token": token }
-        });
-        if (!response.ok) {
-          status("Unable to load monitors", false);
-          return;
-        }
-        const data = await response.json();
-        monitorEl.innerHTML = "";
-        for (const item of data.monitors || []) {
-          const option = document.createElement("option");
-          option.value = String(item.index);
-          option.dataset.width = String(item.width);
-          option.dataset.height = String(item.height);
-          option.textContent = `MSS#${item.index} - ${item.name}`;
-          if (item.current) option.selected = true;
-          monitorEl.appendChild(option);
-        }
-        monitorsLoaded = monitorEl.options.length > 0;
-        if (monitorsLoaded) {
-          status("Monitors loaded");
-        } else {
-          status("No monitor found", false);
-        }
-      } catch (error) {
-        status("Unable to load monitors", false);
+      const generation = connectionGeneration;
+      const data = await requestJson("/api/monitors", {
+        headers: { "X-Auth-Token": token }
+      });
+      if (generation !== connectionGeneration) return;
+      monitorEl.innerHTML = "";
+      for (const item of data.monitors || []) {
+        const option = document.createElement("option");
+        option.value = String(item.index);
+        option.dataset.width = String(item.width);
+        option.dataset.height = String(item.height);
+        option.textContent = `MSS#${item.index} - ${item.name}`;
+        if (item.current) option.selected = true;
+        monitorEl.appendChild(option);
       }
+      monitorsLoaded = monitorEl.options.length > 0;
+      renderMonitorPicker();
+      if (!monitorsLoaded) throw new Error("No monitor found");
     }
 
+    function setMonitorPanelOpen(open) {
+      monitorPanel.classList.toggle("hidden", !open);
+      monitorToggle.setAttribute("aria-expanded", String(open));
+      keepStageMenuInBounds();
+    }
+
+    function renderMonitorPicker() {
+      monitorPanel.textContent = "";
+      monitorButtons = [];
+      let selectedLabel = "Choose\nmonitor";
+      for (const option of monitorEl.options) {
+        const selected = option.value === monitorEl.value;
+        if (selected) selectedLabel = `Monitor\n${option.value}`;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "monitor-option";
+        button.textContent = `${option.textContent} (${option.dataset.width} x ${option.dataset.height})`;
+        button.setAttribute("aria-pressed", String(selected));
+        button.disabled = monitorEl.disabled;
+        button.addEventListener("click", async () => {
+          if (button.disabled) return;
+          setMonitorPanelOpen(false);
+          monitorToggle.focus();
+          if (option.value !== monitorEl.value) await changeMonitor(Number(option.value));
+        });
+        monitorButtons.push(button);
+        monitorPanel.appendChild(button);
+      }
+      monitorToggle.textContent = selectedLabel;
+    }
+
+    monitorToggle.addEventListener("click", () => {
+      if (monitorToggle.disabled) return;
+      setMonitorPanelOpen(monitorToggle.getAttribute("aria-expanded") !== "true");
+    });
+    document.addEventListener("click", (event) => {
+      if (!monitorPanel.contains(event.target) && !monitorToggle.contains(event.target)) {
+        setMonitorPanelOpen(false);
+      }
+    });
+    controlsBar.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || monitorToggle.getAttribute("aria-expanded") !== "true") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMonitorPanelOpen(false);
+      monitorToggle.focus();
+    });
+
     connectBtn.addEventListener("click", async () => {
+      if (connectionState === "connecting" || connectionState === "switching") return;
+      if (connected) {
+        disconnect();
+        return;
+      }
+      setConnectionState("connecting", "Connecting...");
+      const generation = ++connectionGeneration;
+      const sessionToken = tokenEl.value.trim();
       try {
-        token = tokenEl.value.trim();
+        token = sessionToken;
         if (!token) {
-          status("Token required", false);
-          return;
+          throw new Error("Token required");
         }
+        await loadMonitors();
+        if (generation !== connectionGeneration) return;
         if (!monitorsLoaded) {
-          await loadMonitors();
-        }
-        if (!monitorsLoaded) {
-          status("No monitor found", false);
-          return;
+          throw new Error("No monitor found");
         }
         const index = selectedMonitorIndex();
-        const response = await fetch("/api/monitor", {
+        await requestJson("/api/monitor", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Auth-Token": token },
           body: JSON.stringify({ index })
         });
-        if (!response.ok) {
-          status("Monitor selection failed", false);
+        if (generation !== connectionGeneration) return;
+        const sessionData = await requestJson("/api/session", {
+          method: "POST",
+          headers: { "X-Auth-Token": sessionToken }
+        });
+        if (generation !== connectionGeneration) {
+          if (sessionData.sessionId) closeControlSession(sessionData.sessionId, sessionToken);
           return;
         }
-        connected = true;
-        try {
-          await startWebRtcStream();
-        } catch (error) {
-          console.warn("WebRTC failed, falling back to MJPEG", error);
-          closePeerConnection();
-          setMjpegStreamSource();
-          status("Connected (MJPEG fallback)");
-        }
-        stage.focus();
+        if (!sessionData.ok || !sessionData.sessionId) throw new Error("Missing control session");
+        controlSessionId = sessionData.sessionId;
+        inputQueue = createInputQueue(controlSessionId, sessionToken);
+        scheduleHeartbeat(controlSessionId, sessionToken);
+        setConnectionState("connecting", "Starting stream...");
+        await startSelectedStream();
+        if (generation === connectionGeneration && connected) stage.focus();
       } catch (error) {
-        status("Connect failed", false);
+        if (generation === connectionGeneration) failConnection(`Connect failed: ${error.message}`);
       }
-    });
-
-    disconnectBtn.addEventListener("click", () => {
-      disconnect();
     });
 
     async function changeMonitor(index) {
       if (!token) return;
+      if (connectionState === "connecting" || connectionState === "switching") return;
+      finishRemoteDrag(null);
+      remoteKeyboard.releaseAll();
       monitorEl.value = String(index);
+      renderMonitorPicker();
+      const generation = connectionGeneration;
+      const wasConnected = connected;
+      if (wasConnected) setConnectionState("switching", "Changing monitor...");
       try {
-        const response = await fetch("/api/monitor", {
+        await requestJson("/api/monitor", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Auth-Token": token },
           body: JSON.stringify({ index })
         });
-        if (!response.ok) {
-          status("Monitor change failed", false);
-          return;
-        }
-        if (connected) {
-          if (usingWebRtc) {
-            try {
-              await startWebRtcStream();
-            } catch (error) {
-              console.warn("WebRTC restart failed, falling back to MJPEG", error);
-              closePeerConnection();
-              setMjpegStreamSource();
-              status("Connected (MJPEG fallback)");
-            }
-          } else {
-            setMjpegStreamSource();
-          }
+        if (generation !== connectionGeneration) return;
+        if (wasConnected) {
+          await startSelectedStream();
         }
       } catch (error) {
-        status("Monitor change failed", false);
+        if (generation === connectionGeneration) failConnection(`Monitor change failed: ${error.message}`);
       }
     }
 
@@ -743,6 +1057,7 @@
     muteAudioBtn.addEventListener("click", async () => {
       audioMuted = !audioMuted;
       updateAudioButton();
+      renderConnectionControls();
       if (usingWebRtc && viewer.srcObject) {
         try {
           await viewer.play();
@@ -826,33 +1141,49 @@
     window.addEventListener("resize", keepStageMenuInBounds);
     updateFullscreenButtons();
     updateAudioButton();
+    renderConnectionControls();
 
     tokenEl.addEventListener("input", () => {
       monitorsLoaded = false;
       monitorEl.innerHTML = "";
-      if (connected) {
+      renderMonitorPicker();
+      renderConnectionControls();
+      if (connected || connectBtn.disabled) {
         disconnect();
       }
     });
 
+    window.addEventListener("pagehide", disconnect);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && (connected || controlSessionId || connectionState === "connecting")) disconnect();
+    });
+
     stage.addEventListener("mousemove", (event) => {
+      if (performance.now() - lastTouchAt < 800) return;
       sendRemoteMove(event);
     });
 
     stage.addEventListener("mousedown", (event) => {
+      if (performance.now() - lastTouchAt < 800) return;
       startRemoteDrag(event);
     });
 
     window.addEventListener("mouseup", (event) => {
-      finishRemoteDrag(event);
+      finishRemoteDrag(isRemoteSurfaceEvent(event) ? event : null);
     });
 
     window.addEventListener("blur", () => {
       finishRemoteDrag(null);
+      remoteKeyboard.releaseAll();
+    });
+
+    document.addEventListener("focusin", (event) => {
+      if (!isRemoteSurfaceEvent(event)) remoteKeyboard.releaseAll();
     });
 
     stage.addEventListener("pointerdown", (event) => {
       if (event.pointerType === "mouse") return;
+      lastTouchAt = performance.now();
       if (startRemoteDrag(event)) {
         remoteDrag.pointerId = event.pointerId;
         stage.setPointerCapture(event.pointerId);
@@ -869,6 +1200,7 @@
 
     stage.addEventListener("pointerup", (event) => {
       if (event.pointerType === "mouse") return;
+      lastTouchAt = performance.now();
       if (!remoteDrag || remoteDrag.pointerId !== event.pointerId) return;
       finishRemoteDrag(event);
       stage.releasePointerCapture(event.pointerId);
@@ -882,10 +1214,13 @@
 
     stage.addEventListener("touchstart", (event) => {
       if (window.PointerEvent) return;
+      if (stageMenu.contains(event.target) || event.target === mobileKeyboard) return;
       const touch = touchPoint(event);
-      if (!touch) return;
+      if (!touch || !connected || !relativePos(touch)) return;
+      lastTouchAt = performance.now();
+      // Suppress Safari's compatibility mouse event even in click-only mode.
+      event.preventDefault();
       if (startRemoteDrag(touch)) {
-        event.preventDefault();
         remoteDrag.touchId = touch.identifier;
       }
     }, { passive: false });
@@ -899,7 +1234,13 @@
     }, { passive: false });
 
     stage.addEventListener("touchend", (event) => {
-      if (window.PointerEvent || !remoteDrag) return;
+      if (window.PointerEvent) return;
+      if (stageMenu.contains(event.target) || event.target === mobileKeyboard) return;
+      if (performance.now() - lastTouchAt < 800) {
+        lastTouchAt = performance.now();
+        event.preventDefault();
+      }
+      if (!remoteDrag) return;
       const touch = touchPoint(event);
       if (!touch || touch.identifier !== remoteDrag.touchId) return;
       event.preventDefault();
@@ -915,11 +1256,12 @@
     }, { passive: false });
 
     stage.addEventListener("click", (event) => {
+      if (!isRemoteSurfaceEvent(event)) return;
       event.preventDefault();
-      focusMobileKeyboard();
     });
 
     stage.addEventListener("contextmenu", (event) => {
+      if (!isRemoteSurfaceEvent(event)) return;
       event.preventDefault();
       const p = updateRemoteCursor(event);
       if (!p) return;
@@ -931,24 +1273,17 @@
         double: false,
         preserveCursor: !fullMouseEnabled()
       });
-      focusMobileKeyboard();
+      scheduleTouchCursorHide(event);
     });
 
     stage.addEventListener("dblclick", (event) => {
-      const p = updateRemoteCursor(event);
-      if (!p) return;
-      sendEvent({
-        type: "mouse_click",
-        x: p.x,
-        y: p.y,
-        button: event.button,
-        double: true,
-        preserveCursor: !fullMouseEnabled()
-      });
-      focusMobileKeyboard();
+      if (!isRemoteSurfaceEvent(event)) return;
+      // The two preceding presses already produce a remote double-click.
+      event.preventDefault();
     });
 
     stage.addEventListener("wheel", (event) => {
+      if (!isRemoteSurfaceEvent(event)) return;
       event.preventDefault();
       if (!relativePos(event)) return;
       const amount = Math.round(-event.deltaY);
@@ -956,12 +1291,20 @@
     }, { passive: false });
 
     stage.addEventListener("mouseleave", () => {
+      clearTimeout(remoteCursorTimer);
       remoteCursor.style.display = "none";
     });
 
-    function shouldCaptureKey(event) {
-      if (!connected) return false;
+    function isRemoteSurfaceEvent(event) {
       const target = event.target;
+      return !target || target === window || (!stageMenu.contains(target) && !controlsBar.contains(target) &&
+        target !== mobileKeyboard);
+    }
+
+    function shouldCaptureKey(event) {
+      if (connectionState !== "connected") return false;
+      const target = event.target;
+      if (!isRemoteSurfaceEvent(event)) return false;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
         return false;
       }
@@ -987,6 +1330,11 @@
 
     mobileKeyboard.addEventListener("keydown", (event) => {
       if (!connected) return;
+      if (event.ctrlKey || event.altKey || event.metaKey ||
+          event.key === "Control" || event.key === "Alt" || event.key === "Meta") {
+        if (remoteKeyboard.down(event)) event.preventDefault();
+        return;
+      }
       if (event.key === "Backspace" || event.key === "Enter") {
         event.preventDefault();
         sendEvent({ type: "key", key: event.key, action: "tap" });
@@ -996,18 +1344,19 @@
 
     document.addEventListener("keydown", (event) => {
       if (!shouldCaptureKey(event)) return;
-      event.preventDefault();
-      sendEvent({ type: "key", key: event.key, action: "tap" });
+      if (remoteKeyboard.down(event)) event.preventDefault();
+    });
+
+    document.addEventListener("keyup", (event) => {
+      if (connected && remoteKeyboard.up(event)) event.preventDefault();
     });
 
     fallbackViewer.addEventListener("error", () => {
-      connected = false;
-      status("Stream error (token or server)", false);
+      if (connected && !usingWebRtc) failConnection("Stream error (token or server)");
     });
 
     viewer.addEventListener("error", () => {
-      connected = false;
-      status("WebRTC media error", false);
+      if (connected && usingWebRtc) failConnection("WebRTC media error");
     });
   </script>
 </body>

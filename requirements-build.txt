@@ -1,0 +1,4 @@
+# Build tooling only; not a fully locked or bit-for-bit reproducible toolchain.
+# Install into a separate build venv, not the live application environment.
+-r requirements.txt
+PyInstaller==6.22.3

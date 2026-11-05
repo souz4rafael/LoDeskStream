@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.7</Version>
+    <AssemblyVersion>0.1.7.0</AssemblyVersion>
+    <FileVersion>0.1.7.0</FileVersion>
+    <InformationalVersion>$(Version)-local-development</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>LoDeskStream</Product>
+    <Company>LoDeskStream contributors</Company>
+    <Description>LoDeskStream local development candidate; licensing review deferred.</Description>
+    <Deterministic>true</Deterministic>
+    <!-- Keep ignored historical outputs out of compilation even with relocated intermediates. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(LoDeskStreamBuildRoot)' != ''">
+    <BaseIntermediateOutputPath>$(LoDeskStreamBuildRoot)\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>$(LoDeskStreamBuildRoot)\bin\$(MSBuildProjectName)\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

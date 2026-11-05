@@ -6,10 +6,14 @@ if (-not (Test-Path $app)) {
 }
 
 if (-not $env:STREAM_TOKEN) {
-    $env:STREAM_TOKEN = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(18)).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $bytes = New-Object byte[] 18
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $random.GetBytes($bytes) } finally { $random.Dispose() }
+    $env:STREAM_TOKEN = [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    Write-Host "Generated session token (keep private): $env:STREAM_TOKEN"
 }
 
 Write-Host "LoDeskStream starting..."
-Write-Host "STREAM_TOKEN: $env:STREAM_TOKEN"
 Write-Host "Open http://localhost:8765 or http://<this-PC-IP>:8765"
 & $app
+exit $LASTEXITCODE
