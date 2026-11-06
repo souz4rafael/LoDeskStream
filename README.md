@@ -192,7 +192,7 @@ without changing OS devices.
 
 Older iOS/WebKit browsers may connect to WebRTC without rendering video. LoDeskStream automatically falls back to MJPEG if WebRTC does not produce visible frames. Use **Show keyboard** in the controls (or the fullscreen hamburger menu) to open the on-screen keyboard and forward typed text to the host. Touching the remote screen does not open the keyboard automatically. Older iOS versions may still leave fullscreen when you explicitly open the keyboard.
 
-On phones and small tablets, the web UI asks users to rotate to landscape. Installed/PWA mode also declares landscape orientation in the web manifest; browser support varies by iOS version.
+The web UI remains usable in portrait without a rotation prompt. Installed/PWA mode still declares a landscape preference, and fullscreen requests landscape where supported; browser support varies by iOS version.
 
 To uninstall an installed copy, use Windows **Apps & features** or run:
 

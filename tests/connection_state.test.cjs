@@ -79,6 +79,11 @@ function app(timers = { setTimeout, clearTimeout }) {
   return { context, elements, evaluate: source => vm.runInContext(source, context) };
 }
 
+test("portrait mode has no blocking rotation prompt", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../web/index.html"), "utf8");
+  assert.doesNotMatch(html, /rotateHint|Rotate your device/);
+});
+
 test("browser cursor is a centered translucent touch circle", () => {
   const html = fs.readFileSync(path.join(__dirname, "../web/index.html"), "utf8");
   const cursor = html.match(/<svg id="remoteCursor"[\s\S]*?<\/svg>/)[0];

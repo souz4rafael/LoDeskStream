@@ -129,27 +129,6 @@
       pointer-events: none;
       resize: none;
     }
-    #rotateHint {
-      position: fixed;
-      inset: 0;
-      z-index: 999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 28px;
-      box-sizing: border-box;
-      background: #121212;
-      color: #e8e8e8;
-      text-align: center;
-    }
-    #rotateHint strong {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 20px;
-    }
-    @media (orientation: portrait) and (max-width: 900px) {
-      #rotateHint { display: flex; }
-    }
     .hidden { display: none !important; }
     #remoteCursor {
       position: absolute;
@@ -252,12 +231,6 @@
     <select id="monitor" hidden aria-hidden="true" tabindex="-1"></select>
     <div id="monitorPanel" class="hidden" role="group" aria-label="Choose monitor"></div>
   </header>
-  <div id="rotateHint">
-    <div>
-      <strong>Rotate your device</strong>
-      LoDeskStream works best in landscape mode.
-    </div>
-  </div>
   <main>
     <div id="stage" tabindex="0">
       <video id="viewer" autoplay playsinline tabindex="0"></video>
